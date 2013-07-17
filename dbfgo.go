@@ -157,9 +157,6 @@ func GetRecordbyField(fieldname string, fieldval string, fp *os.File) (record ma
 					//fmt.Println(val.Data)
 					temp[i] = val
 				}
-			} else {
-				fmt.Println("Record not found!")
-				return
 			}
 		}
 		i = i + 1
