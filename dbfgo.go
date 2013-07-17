@@ -1,7 +1,7 @@
 package main
 
 import (
-  "fmt"
+	"fmt"
 	"os"
 	//"strconv"
 	"strings"
@@ -28,9 +28,10 @@ type Record struct {
 	Data map[string]string
 }
 
-func GetDbfHead(dbfhead *DbfHead, reader *os.File) {
+func GetDbfHead(reader *os.File) (dbfhead DbfHead) {
 	//fileinfo, _ := reader.Stat()
 	buf := make([]byte, 16)
+	reader.Seek(0, 0)
 	_, err := reader.Read(buf)
 	if err != nil {
 		panic(err)
@@ -40,6 +41,7 @@ func GetDbfHead(dbfhead *DbfHead, reader *os.File) {
 	dbfhead.Headerlen = Changebytetoint(buf[8:10])
 	dbfhead.Recordlen = Changebytetoint(buf[10:12])
 	dbfhead.Records = Changebytetoint(buf[4:8])
+	return dbfhead
 }
 func RemoveNullfrombyte(b []byte) (s string) {
 	for _, val := range b {
@@ -51,12 +53,15 @@ func RemoveNullfrombyte(b []byte) (s string) {
 	}
 	return
 }
-func GetFields(field *Field, reader *os.File, start, end int64) []Field {
-	off := end - start - 264
+func GetFields(reader *os.File) []Field {
+	dbfhead := GetDbfHead(reader)
+
+	off := dbfhead.Headerlen - 32 - 264
+	//fmt.Println(off)
 	fieldlist := make([]Field, off/32)
 	buf := make([]byte, off)
 	//fmt.Println(off)
-	_, err := reader.ReadAt(buf, start)
+	_, err := reader.ReadAt(buf, 32)
 	if err != nil {
 		panic(err)
 	}
@@ -97,14 +102,17 @@ func Changebytetoint(b []byte) (x int64) {
 
 	return
 }
-func GetRecords(dbfhead DbfHead, fields []Field, reader *os.File) (records map[int]Record) {
+func GetRecords(fp *os.File) (records map[int]Record) {
+	dbfhead := GetDbfHead(fp)
+	fp.Seek(0, 0)
+	fields := GetFields(fp)
 	recordlen := dbfhead.Recordlen
 	start := dbfhead.Headerlen
 	buf := make([]byte, recordlen)
 	i := 1
 	temp := map[int]Record{}
 	for {
-		_, err := reader.ReadAt(buf, start)
+		_, err := fp.ReadAt(buf, start)
 		if err != nil {
 			return temp
 			panic(err)
@@ -140,23 +148,19 @@ func GetRecords(dbfhead DbfHead, fields []Field, reader *os.File) (records map[i
 	}
 }
 func GetRecordbyField(fieldname string, fieldval string, fp *os.File) (record map[int]Record) {
-	var start int64 = 32
-	dbfhead := DbfHead{}
-	field := Field{}
-	records := map[int]Record{}
-	GetDbfHead(&dbfhead, fp)
-	headend := dbfhead.Headerlen
-	fields := GetFields(&field, fp, start, headend)
-	records = GetRecords(dbfhead, fields, fp)
+	//GetDbfHead(fp)
+	fields := GetFields(fp)
+	records := GetRecords(fp)
 	temp := map[int]Record{}
 	i := 1
 	for _, val := range records {
 		for _, val1 := range fields {
 			if val1.Name == fieldname && val.Delete {
-				if val.Data[val1.Name] == fieldval {
+				if val.Data[val1.Name] == fieldval || val.Data[val1.Name] == " " {
 					//fmt.Println(val.Data)
 					temp[i] = val
 				}
+
 			}
 		}
 		i = i + 1
@@ -165,14 +169,25 @@ func GetRecordbyField(fieldname string, fieldval string, fp *os.File) (record ma
 }
 func main() {
 
-	fp, err := os.OpenFile("*.dbf", os.O_RDONLY, 0)
+	fp, err := os.OpenFile("111.dbf", os.O_RDONLY, 0)
 	if err != nil {
 		panic(err)
 	}
 	defer fp.Close()
-	records := GetRecordbyField("******", "*****", fp)
+	fields := GetFields(fp)
+	for _, val := range fields {
+		fmt.Println(val.Name, val.Fieldtype, val.FieldLen)
+	}
+	records := GetRecordbyField("****", "****", fp)
 	for _, val := range records {
-		fmt.Println(val.Data["DIRECTORY"], val.Data["DIRSEQUENC"])
+		fmt.Println(val.Data["****"])
+	}
+	records1 := GetRecords(fp)
+	for _, val := range records1 {
+		if val.Delete {
+			fmt.Println(val.Data["CONFIGCODE"], val.Data["DIRECTORY"])
+		}
+
 	}
 
 }
